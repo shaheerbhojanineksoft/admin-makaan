@@ -4,13 +4,15 @@ Admin dashboard for Makaan — same forest-green theme and agency-style side men
 
 ## Features
 
-- **Agencies** — list, view, delete
+- **Agencies** — list, view, enable/disable, delete
 - **Agency queries** — list, view, update status, reply
+- **User queries** — list, view, update status, reply
 - **Reels** — list, view, enable/disable, delete
 - **Recommendations** — list, view, delete
 - **Listings** — list, view, enable/disable, delete
 - **Users** — list, view, delete
 - **Lawyers** — list, view, delete
+- **Dashboard analytics** — entity + time-range filters with chart
 - **Admin profile** — email, phone, location, business hours
 
 ## Run
