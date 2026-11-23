@@ -26,6 +26,7 @@ import {
   getUsers,
   useAdminStore,
 } from '../utils/adminStore'
+import { displayOrDash, useAdminSession } from '../utils/session'
 
 const CARDS = [
   { key: 'agencies', label: 'Agencies', to: '/agencies', icon: Building2, getter: getAgencies },
@@ -74,12 +75,12 @@ function AlertCard({ title, href, counts, badgeLabel, badgeVariant }) {
 
   return (
     <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-      <div className="flex items-start gap-3 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white px-5 py-4">
+      <div className="flex items-start gap-3 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white px-4 py-4 sm:px-5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200">
           <AlertTriangle className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-display text-lg font-extrabold text-slate-900">{title}</h2>
+          <h2 className="font-display text-base font-extrabold text-slate-900 sm:text-lg">{title}</h2>
           <p className="mt-0.5 text-sm text-slate-600">
             {hasOpen
               ? `${counts.total} open ${counts.total === 1 ? 'query needs' : 'queries need'} attention.`
@@ -88,11 +89,11 @@ function AlertCard({ title, href, counts, badgeLabel, badgeVariant }) {
         </div>
       </div>
 
-      <div className="px-5 py-4">
+      <div className="px-4 py-4 sm:px-5">
         {hasOpen ? (
           <Link
             to={href}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3.5 transition hover:border-brand/20 hover:bg-brand-soft/40"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3.5 transition hover:border-brand/20 hover:bg-brand-soft/40 sm:px-4"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Badge variant={badgeVariant}>{badgeLabel}</Badge>
@@ -113,6 +114,9 @@ function AlertCard({ title, href, counts, badgeLabel, badgeVariant }) {
 
 export default function Dashboard() {
   const tick = useAdminStore()
+  const session = useAdminSession()
+  const fullName = displayOrDash(session.name || session.admin?.name)
+  const email = displayOrDash(session.email || session.admin?.email)
 
   const agencyCounts = useMemo(() => countOpen(getAgencyQueries()), [tick])
   const userCounts = useMemo(() => countOpen(getUserQueries()), [tick])
@@ -122,7 +126,7 @@ export default function Dashboard() {
       <PageHeader
         eyebrow="Overview"
         title="Admin dashboard"
-        description="Counts, analytics trends and open query alerts."
+        description={`${fullName} · ${email}`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
