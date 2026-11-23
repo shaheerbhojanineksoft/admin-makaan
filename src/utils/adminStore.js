@@ -14,7 +14,8 @@ function seed() {
       email: 'admin@makaan.pk',
       phone: '+92 21 111 000 111',
       location: 'Head Office, Karachi',
-      businessHours: 'Mon–Sat · 9:00 AM – 6:00 PM',
+      businessOpensAt: '09:00',
+      businessClosesAt: '18:00',
     },
     agencies: [
       {
@@ -659,13 +660,25 @@ export function getAdminData() {
   return ensureData()
 }
 
+function normalizeAdminProfile(profile = {}) {
+  const seeded = seed().adminProfile
+  const next = {
+    ...seeded,
+    ...profile,
+    businessOpensAt: profile.businessOpensAt || seeded.businessOpensAt,
+    businessClosesAt: profile.businessClosesAt || seeded.businessClosesAt,
+  }
+  delete next.businessHours
+  return next
+}
+
 export function getAdminProfile() {
-  return ensureData().adminProfile
+  return normalizeAdminProfile(ensureData().adminProfile)
 }
 
 export function updateAdminProfile(patch) {
   const data = ensureData()
-  data.adminProfile = { ...data.adminProfile, ...patch }
+  data.adminProfile = normalizeAdminProfile({ ...data.adminProfile, ...patch })
   writeData(data)
   return data.adminProfile
 }

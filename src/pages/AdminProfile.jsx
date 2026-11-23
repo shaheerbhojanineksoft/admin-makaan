@@ -41,7 +41,8 @@ export default function AdminProfile() {
       email: form.email.trim(),
       phone: form.phone.trim(),
       location: form.location.trim(),
-      businessHours: form.businessHours.trim(),
+      businessOpensAt: form.businessOpensAt,
+      businessClosesAt: form.businessClosesAt,
     })
     setSaved(true)
   }
@@ -92,15 +93,26 @@ export default function AdminProfile() {
             required
           />
         </Field>
-        <Field label="Business hours">
-          <input
-            className={FIELD}
-            value={form.businessHours}
-            onChange={(e) => set('businessHours', e.target.value)}
-            placeholder="Mon–Sat · 9:00 AM – 6:00 PM"
-            required
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Business opens at">
+            <input
+              className={FIELD}
+              type="time"
+              value={form.businessOpensAt || ''}
+              onChange={(e) => set('businessOpensAt', e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Business closes at">
+            <input
+              className={FIELD}
+              type="time"
+              value={form.businessClosesAt || ''}
+              onChange={(e) => set('businessClosesAt', e.target.value)}
+              required
+            />
+          </Field>
+        </div>
 
         {saved ? (
           <p className="flex items-center gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm font-semibold text-brand">
