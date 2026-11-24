@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Award,
   BadgeCheck,
@@ -24,15 +24,10 @@ import {
 import Badge from '../components/ui/Badge'
 import Modal from '../components/ui/Modal'
 import PageHeader from '../components/ui/PageHeader'
-import {
-  deleteAgency,
-  getAgencies,
-  setAgencyStatus,
-  useAdminStore,
-} from '../utils/adminStore'
+import { adminApi } from '../utils/api'
 
 function isAgencyActive(agency) {
-  return agency?.status !== 'inactive'
+  return agency?.status !== 'inactive' && agency?.isActive !== false
 }
 
 function StatTile({ icon: Icon, value, label }) {
@@ -94,11 +89,13 @@ function DetailItem({ icon: Icon, label, value }) {
 
 function AgencyProfileView({ agency }) {
   const services = agency.services?.length ? agency.services : []
-  const languages = Array.isArray(agency.languages) ? agency.languages.join(', ') : agency.languages
+  const languages = Array.isArray(agency.languages)
+    ? agency.languages.join(', ')
+    : agency.languages
+  const avatar = agency.avatar || agency.profilePicture || ''
 
   return (
     <div className="bg-offwhite">
-      {/* Cover + identity — mirrors Makaan AgentProfile */}
       <section className="relative isolate">
         <div className="relative h-48 w-full bg-brand sm:h-56">
           <div className="absolute inset-0 overflow-hidden">
@@ -113,11 +110,17 @@ function AgencyProfileView({ agency }) {
         </div>
 
         <div className="relative z-10 -mt-12 flex flex-col items-center gap-4 px-5 text-center sm:-mt-14 sm:flex-row sm:items-end sm:px-7 sm:text-left">
-          <img
-            src={agency.avatar}
-            alt=""
-            className="h-24 w-24 rounded-2xl border-4 border-white bg-brand-soft object-cover shadow-lg sm:h-28 sm:w-28"
-          />
+          {avatar ? (
+            <img
+              src={avatar}
+              alt=""
+              className="h-24 w-24 rounded-2xl border-4 border-white bg-brand-soft object-cover shadow-lg sm:h-28 sm:w-28"
+            />
+          ) : (
+            <div className="grid h-24 w-24 place-items-center rounded-2xl border-4 border-white bg-brand-soft text-brand shadow-lg sm:h-28 sm:w-28">
+              <Building2 className="h-10 w-10" />
+            </div>
+          )}
           <div className="pb-1">
             <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
               <h2 className="font-display text-2xl font-extrabold text-slate-900">
@@ -132,10 +135,12 @@ function AgencyProfileView({ agency }) {
             </div>
             <p className="mt-1 text-sm font-semibold text-brand">{agency.name}</p>
             <p className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs font-medium text-slate-500 sm:justify-start">
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-brand" aria-hidden="true" />
-                {agency.city}, Pakistan
-              </span>
+              {agency.city ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-brand" aria-hidden="true" />
+                  {agency.city}, Pakistan
+                </span>
+              ) : null}
               {agency.rating != null ? (
                 <span className="inline-flex items-center gap-1.5">
                   <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
@@ -219,30 +224,69 @@ function AgencyProfileView({ agency }) {
 }
 
 export default function Agencies() {
-  const tick = useAdminStore()
   const [selected, setSelected] = useState(null)
-  const rows = useMemo(() => getAgencies(), [tick])
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  function onDelete(id) {
-    if (!window.confirm('Delete this agency?')) return
-    deleteAgency(id)
-    if (selected?.id === id) setSelected(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const data = await adminApi('/agencies', { auth: true })
+        if (!cancelled) setRows(Array.isArray(data) ? data : [])
+      } catch (err) {
+        if (!cancelled) {
+          setRows([])
+          setError(err?.message || 'Could not load agencies.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function onDelete(id) {
+    try {
+      await adminApi(`/agencies/${id}`, {
+        method: 'DELETE',
+        auth: true,
+      })
+      setRows((list) => list.filter((item) => item.id !== id && item._id !== id))
+      if (selected?.id === id || selected?._id === id) setSelected(null)
+    } catch (err) {
+      setError(err?.message || 'Could not delete agency.')
+    }
   }
 
-  function onToggleActive(row) {
+  async function onToggleActive(row) {
     const nextActive = !isAgencyActive(row)
-    if (
-      !window.confirm(
-        nextActive
-          ? 'Enable this agency again?'
-          : 'Disable this agency on the public site?',
+    const agencyId = row._id || row.id
+    try {
+      const updated = await adminApi(`/agencies/${agencyId}/status`, {
+        method: 'PATCH',
+        auth: true,
+        body: JSON.stringify({ isActive: nextActive }),
+      })
+      const next = updated || {
+        ...row,
+        isActive: nextActive,
+        status: nextActive ? 'active' : 'inactive',
+      }
+      setRows((list) =>
+        list.map((item) =>
+          item.id === row.id || item._id === row._id ? next : item,
+        ),
       )
-    ) {
-      return
+      if (selected?.id === row.id || selected?._id === row._id) setSelected(next)
+    } catch (err) {
+      setError(err?.message || 'Could not update agency status.')
     }
-    const nextStatus = nextActive ? 'active' : 'inactive'
-    setAgencyStatus(row.id, nextStatus)
-    if (selected?.id === row.id) setSelected({ ...row, status: nextStatus })
   }
 
   return (
@@ -267,73 +311,98 @@ export default function Agencies() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => {
-                const active = isAgencyActive(row)
-                return (
-                  <tr
-                    key={row.id}
-                    className={`hover:bg-slate-50/80 ${active ? '' : 'opacity-75'}`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {row.avatar ? (
-                          <img
-                            src={row.avatar}
-                            alt=""
-                            className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/15"
-                          />
-                        ) : null}
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900">{row.name}</p>
-                          <p className="text-xs text-slate-500">{row.contactPerson}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{row.city}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.phone}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-800">
-                      {row.activeListings ?? row.listingsCount}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={active ? 'green' : 'slate'}>
-                        {active ? 'Active' : 'Disabled'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(row)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-brand hover:bg-brand-soft"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onToggleActive(row)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                        >
-                          {active ? (
-                            <Ban className="h-3.5 w-3.5" />
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">
+                    Loading agencies…
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm font-semibold text-rose-600">
+                    {error}
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">
+                    No agencies found.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => {
+                  const active = isAgencyActive(row)
+                  const avatar = row.avatar || row.profilePicture || ''
+                  return (
+                    <tr
+                      key={row._id || row.id}
+                      className={`hover:bg-slate-50/80 ${active ? '' : 'opacity-75'}`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {avatar ? (
+                            <img
+                              src={avatar}
+                              alt=""
+                              className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/15"
+                            />
                           ) : (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-brand" />
+                            <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft text-brand ring-2 ring-brand/15">
+                              <Building2 className="h-4 w-4" />
+                            </span>
                           )}
-                          {active ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(row.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900">{row.name}</p>
+                            <p className="text-xs text-slate-500">{row.contactPerson}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{row.city || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.phone || '—'}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">
+                        {row.activeListings ?? row.listingsCount ?? 0}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={active ? 'green' : 'slate'}>
+                          {active ? 'Active' : 'Disabled'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelected(row)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-brand hover:bg-brand-soft"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleActive(row)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                          >
+                            {active ? (
+                              <Ban className="h-3.5 w-3.5" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-brand" />
+                            )}
+                            {active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(row.id || row._id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -342,28 +411,6 @@ export default function Agencies() {
       {selected ? (
         <Modal flush extraWide onClose={() => setSelected(null)}>
           <AgencyProfileView agency={selected} />
-          <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:px-7">
-            <button
-              type="button"
-              onClick={() => onToggleActive(selected)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              {isAgencyActive(selected) ? (
-                <Ban className="h-3.5 w-3.5" />
-              ) : (
-                <CheckCircle2 className="h-3.5 w-3.5 text-brand" />
-              )}
-              {isAgencyActive(selected) ? 'Disable' : 'Enable'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(selected.id)}
-              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
-          </div>
         </Modal>
       ) : null}
     </div>
